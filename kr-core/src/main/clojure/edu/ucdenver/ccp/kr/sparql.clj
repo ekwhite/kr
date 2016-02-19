@@ -15,6 +15,7 @@
 (def select-default "")
 (def select-distinct "DISTINCT ")
 (def select-reduced "REDUCED ")
+(def pound-sign "#")   ;; use for strafter
 
 (def sparql-1-0 :sparql-1-0)
 (def sparql-1-1 :sparql-1-1)
@@ -243,10 +244,42 @@
        (sparql-query-body optional-clauses)
        " }\n "))
 
+(defn filter-body [filter-clauses]
+  (str " FILTER ( "
+       (operator-body filter-clauses)
+       " )\n "))
+
+(defn bind-body [bind-clauses]
+  (str " BIND "
+       (operator-body bind-clauses)
+       " \n "))
+
+(defn iri-body [iri-clauses]
+  (str " IRI "
+       (operator-body iri-clauses)
+       " \n "))
+
+(defn concat-body [concat-clauses]
+  (str " CONCAT "
+       (operator-body concat-clauses)
+       " \n "))
+
+(defn strafter-body [strafter-clauses]
+  (str " STRAFTER "
+       (operator-body strafter-clauses)
+       " \n "))
+
+
+
+
 ;; (def operator-bound [args]
 ;;      (str " bound(" (filter-body (first args))  ") "))
 
 (declare operator-body)
+
+(defn naked-unary-operator [op-name]
+  (fn [args]
+    (str " " op-name (operator-body (first args)))))
 
 (defn unary-operator [op-name]
   (fn [args]
@@ -304,6 +337,12 @@
       :str (unary-operator "str")
       :lang (unary-operator "lang")
       :datatype (unary-operator "datatype")
+      ;; duplicate bind
+      :bind (naked-unary-operator "bind")   
+      :filter (naked-unary-operator "filter")   
+      :strafter (binary-prefix-operator "strafter")
+      :concat (n-ary-operator "concat")
+      :iri (unary-operator "iri")
       ;;:isBLANK (unary-operator "isBlank")
       ;;:isLITERAL (unary-operator "isLiteral")
 
@@ -328,7 +367,7 @@
       "/" (binary-operator "/")
       "+" (binary-operator "+")
       "-" (binary-operator "-")
-
+      :as (binary-operator "AS")
 
       ;; '|| (n-ary-operator "||")
       ;; '&& (n-ary-operator "&&")
@@ -391,10 +430,6 @@
         (item-to-sparql operator-expression)))))
         ;;(str operator-expression)))))
 
-(defn filter-body [filter-clause]
-  (str " FILTER ( " (operator-body filter-clause) ") "))
-
-
 (defn sparql-query-body [triple-pattern]
   (cond 
    ;; (not (seq? triple-pattern)) ""
@@ -404,7 +439,14 @@
      (apply str (interleave (map sparql-query-body triple-pattern)
                             ;;(repeat ". \n")))
                             (repeat " \n")))
-   (sparql-operator? (first triple-pattern)) (filter-body triple-pattern)
+   ;; used as a catch-all; this routes anything unusual to a FILTER.
+   ;; (sparql-operator? (first triple-pattern)) (filter-body triple-pattern)
+   (sparql-operator? (first triple-pattern)) (operator-body triple-pattern)
+   (= :bind (first triple-pattern)) (bind-body triple-pattern)
+   (= :iri (first triple-pattern)) (iri-body triple-pattern)
+   (= :concat (first triple-pattern)) (concat-body triple-pattern)
+   (= :strafter (first triple-pattern)) (strafter-body triple-pattern)      
+   (= :filter (first triple-pattern)) (filter-body triple-pattern)
    (= :union (first triple-pattern)) (union-body (rest triple-pattern))
    (= :optional (first triple-pattern)) (optional-body (rest triple-pattern))
    :default (sparql-statement triple-pattern)))
@@ -412,6 +454,7 @@
 ;;; full query bodies
 ;;; --------------------------------------------------------
 
+    
 (defn sparql-ask-query [triple-pattern & [options]]
      (let [vars (variables triple-pattern)
            non-vars (symbols-no-vars triple-pattern)
@@ -423,6 +466,7 @@
         (sparql-query-body triple-pattern)
         "}")))
 
+
 (defn sparql-select-query [triple-pattern & [options]]
   (let [vars (or (and options
                       (:select-vars options))
@@ -430,7 +474,11 @@
         non-vars (symbols-no-vars triple-pattern)
         namespaces (distinct (map namespace non-vars))
         prefixes (get-prefixes-from-namespaces namespaces)]
-    (str
+    (println "options" options)
+    (println "non-vars" non-vars)
+    (println "prefixes" prefixes)
+    (println "namespaces" namespaces)
+  (str
      (prefix-block prefixes)
      (apply str "SELECT " *select-type*
             (interleave (map sym-to-sparql vars) (repeat " ")))
@@ -459,7 +507,7 @@
      "\n"
      "WHERE { "
      (sparql-query-body triple-pattern)
-     "}"
+     " } "
      (if *select-limit*
        (str " LIMIT " *select-limit* " ")
        "")
