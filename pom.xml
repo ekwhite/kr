@@ -11,7 +11,7 @@
   </licenses>
 
   <properties>
-    <clojure.version>1.4.0</clojure.version>
+    <clojure.version>1.5.0</clojure.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
     <ver.arq>2.10.1</ver.arq>
