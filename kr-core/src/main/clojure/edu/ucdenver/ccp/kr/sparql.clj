@@ -15,14 +15,13 @@
 (def select-default "")
 (def select-distinct "DISTINCT ")
 (def select-reduced "REDUCED ")
-(def pound-sign "#")   ;; use for strafter
 
 (def sparql-1-0 :sparql-1-0)
 (def sparql-1-1 :sparql-1-1)
 
 ;;; dynamic variables to control function
 
-(defonce ^:dynamic *select-type* select-default)
+(defonce ^:dynamic *select-type* select-distinct)
 
 (defonce ^:dynamic *select-limit* nil)
 
@@ -244,6 +243,15 @@
        (sparql-query-body optional-clauses)
        " }\n "))
 
+(defn graph-body [graph-clauses]
+  (str " GRAPH " (first graph-clauses) " { \n"
+       (sparql-query-body (rest graph-clauses))
+       " }\n "))
+
+(defn pound-operator [args]
+  (str " \"#\" "))
+
+
 (defn filter-body [filter-clauses]
   (str " FILTER ( "
        (operator-body filter-clauses)
@@ -269,6 +277,11 @@
        (operator-body strafter-clauses)
        " \n "))
 
+(defn strbefore-body [strbefore-clauses]
+  (str " STRBEFORE "
+       (operator-body strbefore-clauses)
+       " \n "))
+
 
 
 
@@ -276,6 +289,9 @@
 ;;      (str " bound(" (filter-body (first args))  ") "))
 
 (declare operator-body)
+
+(defn empty-operator [op-name]
+  (str op-name))
 
 (defn naked-unary-operator [op-name]
   (fn [args]
@@ -295,6 +311,13 @@
     (str " " op-name "(" (operator-body (first args)) ", "
          (operator-body (second args)) ") ")))
 
+(defn prefix-n-ary-operator [op-name]
+  (fn [args]
+    (str op-name " ( "
+         (apply str (interpose (map operator-body args)
+                               ))
+         " ) \n ")))
+
 (defn n-ary-operator [op-name]
   (fn [args]
     (str " ( "
@@ -304,7 +327,7 @@
 
 
 (defn not-operator [args]
-  (str "!" (operator-body (first args))))
+  (str " ! " (operator-body (first args))))
 
 
 ;; if the arg is a raw string box it, otherwise leave it alone
@@ -338,10 +361,12 @@
       :lang (unary-operator "lang")
       :datatype (unary-operator "datatype")
       ;; duplicate bind
+      :pound pound-operator  
       :bind (naked-unary-operator "bind")   
-      :filter (naked-unary-operator "filter")   
+      :filter (unary-operator "filter")   
       :strafter (binary-prefix-operator "strafter")
-      :concat (n-ary-operator "concat")
+      :strbefore (binary-prefix-operator "strbefore")
+      :concat (binary-prefix-operator "concat")
       :iri (unary-operator "iri")
       ;;:isBLANK (unary-operator "isBlank")
       ;;:isLITERAL (unary-operator "isLiteral")
@@ -357,6 +382,8 @@
       "&&" (n-ary-operator "&&")
       "!" not-operator
 
+      := (binary-operator "=")
+      :!= (binary-operator "!=")
       "=" (binary-operator "=")
       "!=" (binary-operator "!=")
       "<" (binary-operator "<")
@@ -449,6 +476,7 @@
    (= :filter (first triple-pattern)) (filter-body triple-pattern)
    (= :union (first triple-pattern)) (union-body (rest triple-pattern))
    (= :optional (first triple-pattern)) (optional-body (rest triple-pattern))
+   (= :graph (first triple-pattern)) (graph-body (rest triple-pattern))
    :default (sparql-statement triple-pattern)))
 
 ;;; full query bodies
@@ -556,7 +584,7 @@
 
 (defn query
   ([pattern] (query-pattern *kb* pattern))
-  ([kb pattern & [options]] (binding [*kb* kb]
+  ([kb pattern & [options]] (binding [*kb* kb *select-type* select-distinct]
                               (query-pattern *kb* pattern options))))
 
 (defn query-template
