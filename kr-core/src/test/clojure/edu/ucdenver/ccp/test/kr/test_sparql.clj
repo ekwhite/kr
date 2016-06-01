@@ -321,3 +321,29 @@
                  (query `((?/a
                            ?/p
                            ["foo" ~(URI. "http://www.example.org/custom")])))))))
+
+(kb-test test-bind test-triples-uri
+         (is (= '("Alice" "Bob")
+                (sort (map #(get % '?/madeupname)
+                           (query '((_/person foaf/name ?/name)
+                                    (:bind (:as ?/name ?/madeupname)))))))))
+
+(kb-test test-iri test-triples-uri
+         (is (= 'pro://dom.ext
+                (get (first (query '((:bind (:as (:iri ["pro://dom.ext"]) ?/name)))))
+                     '?/name))))
+
+(kb-test test-concat test-triples-uri
+         (is (= "foobar"
+                (get (first (query '((:bind (:as (:concat "foo" "bar") ?/x)))))
+                     '?/x))))
+
+(kb-test test-strbefore test-triples-uri
+         (is (= "foo"
+                (get (first (query '((:bind (:as (:strbefore "foobar" "bar") ?/x)))))
+                     '?/x))))
+
+(kb-test test-strafter test-triples-uri
+         (is (= "bar"
+                (get (first (query '((:bind (:as (:strafter "foobar" "foo") ?/x)))))
+                     '?/x))))
