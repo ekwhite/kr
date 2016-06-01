@@ -84,33 +84,38 @@
 (defmethod sparql-ify String [s] (pr-str s))
 (defmethod sparql-ify :default [s] (pr-str s))
 
+(defn boxed?
+  [s]
+  (and (sequential? s)
+       (and (> (count s) 0) (< (count s) 3))))
+
 ;; it's possible this could be done faster with a call to rdf/object
 ;;   and then re-serializing that
 (defn item-to-sparql [s]
   (cond
-   ;; symbol
-   (symbol? s) (sym-to-sparql s)
-   ;; no inference allowd
-   ;;(not *infer-literal-type*) (pr-str s)
-   (not *infer-literal-type*) (sparql-ify s)
-   ;; boxed
-   (sequential? s) (let [[x type] s]
-                     (cond
-                      ;; boxed no type
-                      (nil? type) (pr-str (str x)) ; why is a non-string boxed?
-                      ;; lang tagged
-                      (and (string? x)
-                           (string? type)) (sparql-str-lang x type)
-                      ;; typed
-                      :else (str (pr-str (str x)) "^^" 
-                                 (str (sparql-ify type)))))
-   ;; plain string default language
-   (and (string? s) 
-        *use-default-language*
-        *string-literal-language*) (sparql-str-lang s *string-literal-language*)
-   ;;plain literal including plain string 
-        ;;:else (pr-str s)))
-        :else (sparql-ify s)))
+    ;; symbol
+    (symbol? s) (sym-to-sparql s)
+    ;; no inference allowd
+    ;;(not *infer-literal-type*) (pr-str s)
+    (not *infer-literal-type*) (sparql-ify s)
+    ;; boxed
+    (boxed? s) (let [[x type] s]
+                 (cond
+                   ;; boxed no type
+                   (nil? type) (pr-str (str x)) ; why is a non-string boxed?
+                   ;; lang tagged
+                   (and (string? x)
+                        (string? type)) (sparql-str-lang x type)
+                   ;; typed
+                   :else (str (pr-str (str x)) "^^"
+                              (str (sparql-ify type)))))
+    ;; plain string default language
+    (and (string? s)
+         *use-default-language*
+         *string-literal-language*) (sparql-str-lang s *string-literal-language*)
+    ;;plain literal including plain string
+    ;;:else (pr-str s)))
+    :else (sparql-ify s)))
 
 ;; :inverse
 ;; :or
@@ -233,6 +238,12 @@
 
 (declare operator-body)
 
+(defn- validate
+  [validator input msg]
+  (if (validator input)
+    input
+    (throw (ex-info msg {:validator validator :input input}))))
+
 (defn pound-operator [args]
   (str " \"#\" "))
 
@@ -300,6 +311,13 @@
 ;;          (str ", " (operator-body (first (rest (rest args)))) ")")
 ;;          ") ")))
 
+(defn- validated
+  [op-name op-fn validator msg]
+  (fn [args]
+    (if (validator args)
+      ((op-fn op-name) args)
+      (throw (ex-info msg {:operator op-name :arguments args})))))
+
 (def sparql-operators
      {:bound (unary-operator "bound")
       :isIRI (unary-operator "isIRI")
@@ -316,7 +334,9 @@
       :strafter (binary-prefix-operator "strafter")
       :strbefore (binary-prefix-operator "strbefore")
       :concat (binary-prefix-operator "concat")
-      :iri (unary-operator "iri")
+      :iri (validated "iri" unary-operator
+                      #(and (= 1 (count %)) (boxed? (first %)))
+                      "The argument to IRI() must be a boxed string literal without a language tag; the use of language tags in IRIs is not supported by all stores.")
       ;;:isBLANK (unary-operator "isBlank")
       ;;:isLITERAL (unary-operator "isLiteral")
 
@@ -409,7 +429,7 @@
 ;; -------------------------------------------------------------- SPARQL --- ;;
 
 (defn sparql-query-body [triple-pattern]
-  (cond 
+  (cond
    ;; (not (seq? triple-pattern)) ""
    ;; (seq? (first triple-pattern))
    (not (sequential? triple-pattern)) ""
@@ -514,9 +534,11 @@
                               (ask-pattern *kb* pattern options))))
 
 (defn query
-  ([pattern] (query-pattern *kb* pattern))
-  ([kb pattern & [options]] (binding [*kb* kb *select-type* select-distinct]
-                              (query-pattern *kb* pattern options))))
+  ([pattern]
+   (query-pattern *kb* pattern))
+  ([kb pattern & [options]]
+   (binding [*kb* kb *select-type* select-distinct]
+     (query-pattern *kb* pattern options))))
 
 (defn query-template
   ([result-template pattern]

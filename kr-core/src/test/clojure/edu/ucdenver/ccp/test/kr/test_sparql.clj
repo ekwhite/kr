@@ -226,9 +226,6 @@
            (is (= 1
                   (count (query '((?/person foaf/firstname ["Alice" "en"])))))))
          (testing "boxed, unforced; language missing"
-           ;; FIXME: Why do we allow this?  This leads to inconsistent
-           ;; representation of literals.  Is "Alice" really not the same as
-           ;; ["Alice"]?
            (is (= 0
                   (count (query '((?/person foaf/firstname ["Alice"])))))))
          (testing "exact match; 'bob' isn't 'Bob'"
@@ -331,7 +328,9 @@
 (kb-test test-iri test-triples-uri
          (is (= 'pro://dom.ext
                 (get (first (query '((:bind (:as (:iri ["pro://dom.ext"]) ?/name)))))
-                     '?/name))))
+                     '?/name)))
+         (is (thrown-with-msg? clojure.lang.ExceptionInfo #"must be a boxed string"
+               (query '((:bind (:as (:iri "pro://dom.ext") ?/name)))))))
 
 (kb-test test-concat test-triples-uri
          (is (= "foobar"
