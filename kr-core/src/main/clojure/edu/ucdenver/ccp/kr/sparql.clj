@@ -241,34 +241,6 @@
        (operator-body filter-clauses)
        " )\n "))
 
-(defn bind-body [bind-clauses]
-  (str " BIND "
-       (operator-body bind-clauses)
-       " \n "))
-
-(defn iri-body [iri-clauses]
-  (str " IRI "
-       (operator-body iri-clauses)
-       " \n "))
-
-(defn concat-body [concat-clauses]
-  (str " CONCAT "
-       (operator-body concat-clauses)
-       " \n "))
-
-(defn strafter-body [strafter-clauses]
-  (str " STRAFTER "
-       (operator-body strafter-clauses)
-       " \n "))
-
-(defn strbefore-body [strbefore-clauses]
-  (str " STRBEFORE "
-       (operator-body strbefore-clauses)
-       " \n "))
-
-;; (def operator-bound [args]
-;;      (str " bound(" (filter-body (first args))  ") "))
-
 (defn empty-operator [op-name]
   (str op-name))
 
@@ -448,10 +420,6 @@
    ;; used as a catch-all; this routes anything unusual to a FILTER.
    ;; (sparql-operator? (first triple-pattern)) (filter-body triple-pattern)
    (sparql-operator? (first triple-pattern)) (operator-body triple-pattern)
-   (= :bind (first triple-pattern)) (bind-body triple-pattern)
-   (= :iri (first triple-pattern)) (iri-body triple-pattern)
-   (= :concat (first triple-pattern)) (concat-body triple-pattern)
-   (= :strafter (first triple-pattern)) (strafter-body triple-pattern)      
    (= :filter (first triple-pattern)) (filter-body triple-pattern)
    (= :union (first triple-pattern)) (union-body (rest triple-pattern))
    (= :optional (first triple-pattern)) (optional-body (rest triple-pattern))
